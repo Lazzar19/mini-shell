@@ -1,16 +1,20 @@
 
 use std::{
     env,
-    io::{self, Write},
     os::unix::fs::PermissionsExt,
     os::unix::process::CommandExt,
     path::PathBuf,
     process::Command,
 };
 
+use rustyline::{error::ReadlineError, Editor};
+
+mod completion;
+use completion::ShellHelper;
+
 
 fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "echo" | "exit" | "type" | "pwd")
+    matches!(cmd, "echo" | "exit" | "type" | "pwd" | "cd")
 }
 
 
@@ -74,6 +78,25 @@ fn locate_executable_files(command: &str) -> Option<PathBuf> {
 }
 
 
+fn func_change_directory(args: &str) {
+
+    // cd command
+
+    let directory = if args.trim().is_empty() {
+        env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+    } else {
+        PathBuf::from(args.trim())
+    };
+
+    if let Err(error) = env::set_current_dir(&directory) {
+        eprintln!("cd: {}: {}", directory.display(), error);
+    };
+
+
+
+}
+
+
 fn func_type(command: &str) {
 
     if is_builtin(command) {
@@ -91,18 +114,34 @@ fn func_type(command: &str) {
 
 fn main() {
 
+    let helper = ShellHelper::new();
+    let mut editor = Editor::new().expect("Failed to create editor");
+    editor.set_helper(Some(helper));
+
     loop {
 
-        print!("$ ");
-        io::stdout().flush().unwrap();
-
-        let mut command: String = String::new();
-
-        if io::stdin().read_line(&mut command).unwrap() == 0 {
-            break;
+        let command = match editor.readline("$ ") {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                continue;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("exit");
+                break;
+            }
+            Err(err) => {
+                eprintln!("Error reading line: {}", err);
+                break;
+            }
         };
 
-        command = command.trim().to_string();
+        let command = command.trim();
+        if command.is_empty() { continue; }
+
+        if let Err(error) = editor.add_history_entry(command) {
+            eprintln!("Error adding history entry: {}", error);
+        }
 
         let (cmd, args) = command.split_once(' ').unwrap_or((&command, ""));
 
@@ -113,8 +152,9 @@ fn main() {
                 func_type(arg);
             }
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
+            "cd" => func_change_directory(args),
             "" => continue,
-            _ => execute_non_builtin_commands(cmd),
+            _ => execute_non_builtin_commands(command),
 
         }
 
