@@ -10,7 +10,7 @@ use std::{
 
 
 fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "echo" | "exit" | "type" | "ls")
+    matches!(cmd, "echo" | "exit" | "type" | "pwd")
 }
 
 
@@ -29,7 +29,7 @@ fn execute_non_builtin_commands(input: &str) {
         return;
     };
 
-    
+
     let result = Command::new(path).arg0(command).args(args).status();
 
     match result {
@@ -112,6 +112,7 @@ fn main() {
             "type" => for arg in args.split_whitespace() {
                 func_type(arg);
             }
+            "pwd" => println!("{}", env::current_dir().unwrap().display()),
             "" => continue,
             _ => execute_non_builtin_commands(cmd),
 
