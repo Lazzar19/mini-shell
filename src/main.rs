@@ -1,6 +1,7 @@
 
 use std::{
     env,
+    io::ErrorKind,
     os::unix::fs::PermissionsExt,
     os::unix::process::CommandExt,
     path::PathBuf,
@@ -79,21 +80,33 @@ fn locate_executable_files(command: &str) -> Option<PathBuf> {
 
 
 fn func_change_directory(args: &str) {
+    let argument = args.trim();
 
-    // cd command
+    let directory = if argument.is_empty() || argument == "~" {
+        let Some(home) = env::var_os("HOME") else {
+            eprintln!("cd: HOME is not set");
+            return;
+        };
 
-    let directory = if args.trim().is_empty() {
-        env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+        PathBuf::from(home)
     } else {
-        PathBuf::from(args.trim())
+        PathBuf::from(argument)
     };
 
     if let Err(error) = env::set_current_dir(&directory) {
-        eprintln!("cd: {}: {}", directory.display(), error);
-    };
-
-
-
+        match error.kind() {
+            ErrorKind::NotFound => {
+                eprintln!("cd: {}: No such file or directory", directory.display());
+            }
+            ErrorKind::PermissionDenied => {
+                eprintln!("cd: {}: Permission denied", directory.display());
+            }
+            ErrorKind::NotADirectory => {
+                eprintln!("cd: {}: Not a directory", directory.display());
+            }
+            _ => eprintln!("cd: {}: {}", directory.display(), error),
+        }
+    }
 }
 
 
