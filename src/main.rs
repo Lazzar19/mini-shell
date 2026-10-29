@@ -1,7 +1,8 @@
 
 use std::{
     env,
-    io::ErrorKind,
+    fs::File,
+    io::{ErrorKind, Write},
     os::unix::{fs::PermissionsExt, process::CommandExt},
     path::PathBuf,
     process::Command,
@@ -19,7 +20,27 @@ fn is_builtin(cmd: &str) -> bool {
     matches!(cmd, "echo" | "exit" | "type" | "pwd" | "cd")
 }
 
-fn execute_non_builtin_commands(tokens: &[String]) {
+fn split_stdout_redirect(tokens: &[String],) -> Result<(&[String], Option<&str>), String> {
+    let Some(operator_index) = tokens.iter().position(|token| token == ">" || token == "1>") else {
+        return Ok((tokens, None));
+    };
+
+    let Some(filename) = tokens.get(operator_index + 1) else {
+        return Err("syntax error: expected filename after '>'".to_string());
+    };
+
+    if operator_index == 0 {
+        return Err("syntax error: expected command before '>'".to_string());
+    }
+
+    if operator_index + 2 < tokens.len() {
+        return Err("syntax error: unexpected token after redirect filename".to_string());
+    }
+
+    Ok((&tokens[..operator_index], Some(filename)))
+}
+
+fn execute_non_builtin_commands(tokens: &[String], redirect: Option<&str>) {
     let Some(command) = tokens.first() else {
         return;
     };
@@ -29,16 +50,24 @@ fn execute_non_builtin_commands(tokens: &[String]) {
         return;
     };
 
-    let result = Command::new(path)
-        .arg0(command)
-        .args(&tokens[1..])
-        .status();
+    let mut process = Command::new(path);
+    process.arg0(command).args(&tokens[1..]);
+
+    if let Some(filename) = redirect {
+        let output_file = match File::create(filename) {
+            Ok(file) => file,
+            Err(error) => {
+                eprintln!("{}: {}", filename, error);
+                return;
+            }
+        };
+
+        process.stdout(output_file);
+    }
+
+    let result = process.status();
 
     match result {
-        Ok(status) if !status.success() => {
-            eprintln!("{} exited with status {}", command, status);
-        }
-
         Ok(_) => {},
         Err(error) => {
             eprintln!("failed to execute {}: {}", command, error);
@@ -76,7 +105,7 @@ fn locate_executable_files(command: &str) -> Option<PathBuf> {
 }
 
 
-fn func_change_directory(args: &[String]) {
+fn change_directory(args: &[String]) {
     let directory = if args.is_empty() || args[0] == "~" {
         let Some(home) = env::var_os("HOME") else {
             eprintln!("cd: HOME is not set");
@@ -161,21 +190,44 @@ fn main() {
             }
         };
 
+        let (tokens, redirect) = match split_stdout_redirect(&tokens) {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("{}", error);
+                continue;
+            }
+        };
+
         let Some(cmd) = tokens.first().map(String::as_str) else {
             continue;
         };
 
         match cmd {
             "exit" => break,
-            "echo" => println!("{}", tokens[1..].join(" ")),
+            "echo" => {
+                let output = tokens[1..].join(" ");
+
+                if let Some(filename) = redirect {
+                    match File::create(filename) {
+                        Ok(mut file) => {
+                            if let Err(error) = writeln!(file, "{output}") {
+                                eprintln!("{}: {}", filename, error);
+                            }
+                        }
+                        Err(error) => eprintln!("{}: {}", filename, error),
+                    }
+                } else {
+                    println!("{output}");
+                }
+            }
             "type" => {
                 for arg in &tokens[1..] {
                     func_type(arg);
                 }
             }
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
-            "cd" => func_change_directory(&tokens[1..]),
-            _ => execute_non_builtin_commands(&tokens),
+            "cd" => change_directory(&tokens[1..]),
+            _ => execute_non_builtin_commands(tokens, redirect),
 
         }
 
