@@ -2,30 +2,49 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
     let mut tokens = Vec::new();
     let mut token = String::new();
     let mut token_started = false;
-    let mut in_single_quotes = false;
+    let mut quote: Option<char> = None;
+    
 
-    for character in input.chars() {
-        match character {
-            '\'' => {
-                in_single_quotes = !in_single_quotes;
-                token_started = true;
-            }
-            character if character.is_whitespace() && !in_single_quotes => {
-                if token_started {
-                    tokens.push(std::mem::take(&mut token));
-                    token_started = false;
+    for character  in input.chars() {
+
+        match quote {
+            Some(active_quote) => {
+                if character == active_quote {
+                    quote = None;
+                } else {
+                    token.push(character);
                 }
             }
-            character => {
-                token.push(character);
-                token_started = true;
+
+            None => match character {
+                '\'' | '"' => {
+                    quote = Some(character);
+                    token_started = true;
+                }
+
+                character if character.is_whitespace() => {
+                    if token_started {
+                        tokens.push(std::mem::take(&mut token));
+                        token_started = false;
+                    }
+                }
+
+                character => {
+                    token.push(character);
+                    token_started = true;
+                }
+
             }
         }
+
     }
 
-    if in_single_quotes {
-        return Err("unterminated single quote".to_string());
+
+    if let Some(quote) = quote {
+        let quote_name = if quote == '\'' { "single" } else { "double" };
+        return Err(format!("unterminated {quote_name} quote"));
     }
+
 
     if token_started {
         tokens.push(token);
@@ -63,4 +82,6 @@ mod tests {
     fn reports_unterminated_single_quote() {
         assert!(parse_command("echo 'hello").is_err());
     }
+
+
 }
