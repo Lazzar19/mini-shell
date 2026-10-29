@@ -2,8 +2,7 @@
 use std::{
     env,
     io::ErrorKind,
-    os::unix::fs::PermissionsExt,
-    os::unix::process::CommandExt,
+    os::unix::{fs::PermissionsExt, process::CommandExt},
     path::PathBuf,
     process::Command,
 };
@@ -11,31 +10,29 @@ use std::{
 use rustyline::{error::ReadlineError, Editor};
 
 mod completion;
-use completion::ShellHelper;
+mod parser;
 
+use completion::ShellHelper;
+use parser::parse_command;
 
 fn is_builtin(cmd: &str) -> bool {
     matches!(cmd, "echo" | "exit" | "type" | "pwd" | "cd")
 }
 
-
-
-fn execute_non_builtin_commands(input: &str) {
-
-    let mut parts = input.split_whitespace();
-    let Some(command) = parts.next() else {
+fn execute_non_builtin_commands(tokens: &[String]) {
+    let Some(command) = tokens.first() else {
         return;
     };
-
-    let args: Vec<&str> = parts.collect();
 
     let Some(path) = locate_executable_files(command) else {
         println!("{}: command not found", command);
         return;
     };
 
-
-    let result = Command::new(path).arg0(command).args(args).status();
+    let result = Command::new(path)
+        .arg0(command)
+        .args(&tokens[1..])
+        .status();
 
     match result {
         Ok(status) if !status.success() => {
@@ -79,10 +76,8 @@ fn locate_executable_files(command: &str) -> Option<PathBuf> {
 }
 
 
-fn func_change_directory(args: &str) {
-    let argument = args.trim();
-
-    let directory = if argument.is_empty() || argument == "~" {
+fn func_change_directory(args: &[String]) {
+    let directory = if args.is_empty() || args[0] == "~" {
         let Some(home) = env::var_os("HOME") else {
             eprintln!("cd: HOME is not set");
             return;
@@ -90,7 +85,7 @@ fn func_change_directory(args: &str) {
 
         PathBuf::from(home)
     } else {
-        PathBuf::from(argument)
+        PathBuf::from(&args[0])
     };
 
     if let Err(error) = env::set_current_dir(&directory) {
@@ -125,6 +120,8 @@ fn func_type(command: &str) {
 
 }
 
+
+
 fn main() {
 
     let helper = ShellHelper::new();
@@ -156,23 +153,33 @@ fn main() {
             eprintln!("Error adding history entry: {}", error);
         }
 
-        let (cmd, args) = command.split_once(' ').unwrap_or((&command, ""));
+        let tokens = match parse_command(command) {
+            Ok(tokens) => tokens,
+            Err(error) => {
+                eprintln!("parse error: {}", error);
+                continue;
+            }
+        };
+
+        let Some(cmd) = tokens.first().map(String::as_str) else {
+            continue;
+        };
 
         match cmd {
             "exit" => break,
-            "echo" => println!("{}", args.trim_start()),
-            "type" => for arg in args.split_whitespace() {
-                func_type(arg);
+            "echo" => println!("{}", tokens[1..].join(" ")),
+            "type" => {
+                for arg in &tokens[1..] {
+                    func_type(arg);
+                }
             }
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
-            "cd" => func_change_directory(args),
-            "" => continue,
-            _ => execute_non_builtin_commands(command),
+            "cd" => func_change_directory(&tokens[1..]),
+            _ => execute_non_builtin_commands(&tokens),
 
         }
 
 
     }
-
 
 }
