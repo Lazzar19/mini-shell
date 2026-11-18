@@ -3,7 +3,7 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
     let mut token = String::new();
     let mut token_started = false;
     let mut quote: Option<char> = None;
-    let mut characters = input.chars().peekable();    
+    let mut characters = input.chars().peekable();
 
     while let Some(character) = characters.next() {
         match quote {
@@ -14,7 +14,7 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
                     token.push(character);
                 }
             }
-            
+
             Some('"') => match character {
                 '"' => quote = None,
                 '\\' => match characters.peek().copied() {
@@ -22,9 +22,9 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
                         token.push(characters.next().unwrap());
                     }
                     Some(_) | None => token.push('\\'),
-                }
+                },
                 character => token.push(character),
-            }
+            },
 
             Some(active_quote) => {
                 if character == active_quote {
@@ -49,6 +49,29 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
                     }
                 }
 
+                '>' => {
+                    if token_started && (token == "1" || token == "2") {
+                        let prefix = std::mem::take(&mut token);
+                        if characters.peek() == Some(&'>') {
+                            characters.next();
+                            tokens.push(format!("{prefix}>>"));
+                        } else {
+                            tokens.push(format!("{prefix}>"));
+                        }
+                    } else {
+                        if token_started {
+                            tokens.push(std::mem::take(&mut token));
+                        }
+                        if characters.peek() == Some(&'>') {
+                            characters.next();
+                            tokens.push(">>".to_string());
+                        } else {
+                            tokens.push(">".to_string());
+                        }
+                    }
+                    token_started = false;
+                }
+
                 character if character.is_whitespace() => {
                     if token_started {
                         tokens.push(std::mem::take(&mut token));
@@ -60,18 +83,14 @@ pub fn parse_command(input: &str) -> Result<Vec<String>, String> {
                     token.push(character);
                     token_started = true;
                 }
-
-            }
+            },
         }
-
     }
-
 
     if let Some(quote) = quote {
         let quote_name = if quote == '\'' { "single" } else { "double" };
         return Err(format!("unterminated {quote_name} quote"));
     }
-
 
     if token_started {
         tokens.push(token);
@@ -110,8 +129,7 @@ mod tests {
         assert!(parse_command("echo 'hello").is_err());
     }
 
-
-        #[test]
+    #[test]
     fn removes_backslash_outside_quotes() {
         assert_eq!(
             parse_command(r#"echo hello\ world"#).unwrap(),
@@ -126,12 +144,24 @@ mod tests {
             vec!["echo", r#"hello\ world"#]
         );
     }
-    
+
     #[test]
     fn handles_escapes_inside_double_quotes() {
         assert_eq!(
             parse_command(r#"echo "hello\"world\\\$""#).unwrap(),
             vec!["echo", r#"hello"world\$"#]
+        );
+    }
+
+    #[test]
+    fn parses_append_redirect_operators() {
+        assert_eq!(
+            parse_command("echo hello>>output.txt").unwrap(),
+            vec!["echo", "hello", ">>", "output.txt"]
+        );
+        assert_eq!(
+            parse_command("ls 2>>errors.txt").unwrap(),
+            vec!["ls", "2>>", "errors.txt"]
         );
     }
 }
