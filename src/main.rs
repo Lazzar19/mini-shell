@@ -6,7 +6,11 @@ use std::{
     process::Command,
 };
 
-use rustyline::{Editor, error::ReadlineError};
+use rustyline::{
+    Config, Editor,
+    config::BellStyle,
+    error::ReadlineError,
+};
 
 mod completion;
 mod parser;
@@ -133,8 +137,9 @@ fn func_type(command: &str, redirections: &Redirections) {
 }
 
 fn main() {
+    let config = Config::builder().bell_style(BellStyle::Audible).build();
     let helper = ShellHelper::new();
-    let mut editor = Editor::new().expect("Failed to create editor");
+    let mut editor = Editor::with_config(config).expect("Failed to create editor");
     editor.set_helper(Some(helper));
 
     loop {
