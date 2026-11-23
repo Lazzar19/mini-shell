@@ -8,7 +8,7 @@ use std::{
 
 use rustyline::{
     Config, Editor,
-    config::BellStyle,
+    config::{BellStyle, CompletionType},
     error::ReadlineError,
 };
 
@@ -137,7 +137,12 @@ fn func_type(command: &str, redirections: &Redirections) {
 }
 
 fn main() {
-    let config = Config::builder().bell_style(BellStyle::Audible).build();
+    // List mode inserts one candidate and stops. An empty candidate list rings the bell.
+    // The command completer never returns more than one candidate; it prints multiple matches itself.
+    let config = Config::builder()
+        .bell_style(BellStyle::Audible)
+        .completion_type(CompletionType::List)
+        .build();
     let helper = ShellHelper::new();
     let mut editor = Editor::with_config(config).expect("Failed to create editor");
     editor.set_helper(Some(helper));
