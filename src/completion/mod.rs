@@ -1,4 +1,5 @@
 mod candidates;
+mod files;
 mod multiple;
 mod partial;
 
@@ -9,13 +10,14 @@ use std::{
 
 use rustyline::{
     Context, Helper,
-    completion::{Completer, FilenameCompleter, Pair},
+    completion::{Completer, Pair},
     highlight::Highlighter,
     hint::Hinter,
     validate::Validator,
 };
 
 use candidates::command_candidates;
+use files::{file_candidates, present};
 use multiple::AmbiguousTab;
 
 struct PendingList {
@@ -24,14 +26,12 @@ struct PendingList {
 }
 
 pub struct ShellHelper {
-    filename_completer: FilenameCompleter,
     pending_list: RefCell<Option<PendingList>>,
 }
 
 impl ShellHelper {
     pub fn new() -> Self {
         Self {
-            filename_completer: FilenameCompleter::new(),
             pending_list: RefCell::new(None),
         }
     }
@@ -75,13 +75,14 @@ impl Completer for ShellHelper {
 
         let before_word = line[..word_start].trim();
         let prefix = &line[word_start..pos];
+        let completing_command = before_word.is_empty();
+        let _ = context;
 
-        if !before_word.is_empty() {
-            self.pending_list.borrow_mut().take();
-            return self.filename_completer.complete(line, pos, context);
-        }
-
-        let names = command_candidates(prefix);
+        let names = if completing_command {
+            command_candidates(prefix)
+        } else {
+            file_candidates(prefix)
+        };
 
         if names.is_empty() {
             self.pending_list.borrow_mut().take();
@@ -90,6 +91,11 @@ impl Completer for ShellHelper {
 
         if let Some(text) = partial::insertion(prefix, &names) {
             self.pending_list.borrow_mut().take();
+            let text = if completing_command {
+                text
+            } else {
+                present(text)
+            };
             return Ok((word_start, vec![pair(text)]));
         }
 
