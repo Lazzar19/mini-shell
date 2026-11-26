@@ -1,4 +1,9 @@
 /// Text that replaces the current word, when Tab can move the cursor forward.
+///
+/// Several matches complete to their longest common prefix when that prefix is
+/// longer than the current input (`xyz_foo`, or `re` for `readme.md` and
+/// `report.txt`). When it is not, this returns `None`: the first Tab rings
+/// the bell, and later Tabs list the matches.
 pub fn insertion(prefix: &str, names: &[String]) -> Option<String> {
     match names {
         [only] => Some(format!("{only} ")),
@@ -46,10 +51,18 @@ mod tests {
 
     #[test]
     fn completes_only_the_shared_prefix() {
-        let names = owned(&["xyz_foo", "xyz_foo_bar", "xyz_foo_bar_quz"]);
+        let names = owned(&["xyz_foo", "xyz_foo_bar", "xyz_foo_bar_baz"]);
 
         assert_eq!(insertion("xyz_", &names).as_deref(), Some("xyz_foo"));
         assert_eq!(insertion("xyz_foo", &names), None);
+    }
+
+    #[test]
+    fn completes_files_to_their_shared_letters() {
+        let names = owned(&["readme.md", "report.txt"]);
+
+        assert_eq!(insertion("r", &names).as_deref(), Some("re"));
+        assert_eq!(insertion("re", &names), None);
     }
 
     #[test]

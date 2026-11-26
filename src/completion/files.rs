@@ -72,6 +72,7 @@ mod tests {
     use std::fs;
 
     use super::{file_candidates_in, present};
+    use crate::completion::multiple::{AmbiguousTab, ambiguous_tab};
     use crate::completion::partial::insertion;
 
     #[test]
@@ -121,6 +122,24 @@ mod tests {
             file_candidates_in("src/mai", &directory),
             vec!["src/main.rs".to_string()]
         );
+
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn empty_argument_lists_files_and_directories_on_the_second_tab() {
+        let directory = temp_case_dir("several");
+        fs::write(directory.join("bar.txt"), b"").unwrap();
+        fs::create_dir(directory.join("foo")).unwrap();
+
+        let names = file_candidates_in("", &directory);
+        assert_eq!(names, vec!["bar.txt".to_string(), "foo/".to_string()]);
+        assert_eq!(insertion("", &names), None);
+        assert!(matches!(ambiguous_tab(&names, false), AmbiguousTab::Bell));
+        match ambiguous_tab(&names, true) {
+            AmbiguousTab::Show(line) => assert_eq!(line, "bar.txt  foo/"),
+            AmbiguousTab::Bell => panic!("second tab should list matches"),
+        }
 
         let _ = fs::remove_dir_all(&directory);
     }

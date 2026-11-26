@@ -36,15 +36,14 @@ impl ShellHelper {
         }
     }
 
+    /// The first Tab on this input is not a repeat. Later Tabs stay repeats until the input changes.
     fn repeat_of_previous_tab(&self, line: &str, position: usize) -> bool {
         let mut pending = self.pending_list.borrow_mut();
         let same = pending
             .as_ref()
             .is_some_and(|previous| previous.line == line && previous.position == position);
 
-        if same {
-            *pending = None;
-        } else {
+        if !same {
             *pending = Some(PendingList {
                 line: line.to_string(),
                 position,
@@ -52,6 +51,21 @@ impl ShellHelper {
         }
 
         same
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShellHelper;
+
+    #[test]
+    fn tabs_after_the_first_keep_listing_until_the_input_changes() {
+        let helper = ShellHelper::new();
+
+        assert!(!helper.repeat_of_previous_tab("stat ", 5));
+        assert!(helper.repeat_of_previous_tab("stat ", 5));
+        assert!(helper.repeat_of_previous_tab("stat ", 5));
+        assert!(!helper.repeat_of_previous_tab("stat b", 7));
     }
 }
 

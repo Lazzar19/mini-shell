@@ -1,14 +1,16 @@
-/// What to do when several commands match and none can be added yet.
+/// First `<TAB>`: ring the bell (`\x07`) to indicate multiple matches exist.
+/// Subsequent `<TAB>` presses: list all matches in alphabetical order on a new line,
+/// then redisplay the prompt.
 pub enum AmbiguousTab {
-    /// First Tab: ring the bell and leave the word unchanged.
     Bell,
-    /// Second Tab: one line of matches, separated by two spaces.
     Show(String),
 }
 
 pub fn ambiguous_tab(names: &[String], repeat: bool) -> AmbiguousTab {
     if repeat {
-        AmbiguousTab::Show(names.join("  "))
+        let mut ordered = names.to_vec();
+        ordered.sort();
+        AmbiguousTab::Show(ordered.join("  "))
     } else {
         AmbiguousTab::Bell
     }
@@ -32,12 +34,17 @@ mod tests {
     }
 
     #[test]
-    fn second_tab_lists_matches_with_two_spaces() {
-        match ambiguous_tab(&names(), true) {
+    fn later_tabs_list_matches_alphabetically() {
+        let names = ["xyz_quz", "xyz_bar", "xyz_baz"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        match ambiguous_tab(&names, true) {
             AmbiguousTab::Show(line) => {
                 assert_eq!(line, "xyz_bar  xyz_baz  xyz_quz");
             }
-            AmbiguousTab::Bell => panic!("second tab should list matches"),
+            AmbiguousTab::Bell => panic!("later tabs should list matches"),
         }
     }
 }
