@@ -92,6 +92,23 @@ mod tests {
     }
 
     #[test]
+    fn completes_each_later_argument_on_its_own() {
+        let directory = temp_case_dir("multi");
+        fs::create_dir(directory.join("bar")).unwrap();
+        fs::write(directory.join("foo"), b"").unwrap();
+
+        let directory_match = file_candidates_in("b", &directory);
+        assert_eq!(present(insertion("b", &directory_match).unwrap()), "bar/");
+
+        let file_match = file_candidates_in("f", &directory);
+        assert_eq!(insertion("f", &file_match).as_deref(), Some("foo "));
+
+        assert!(file_candidates_in("x", &directory).is_empty());
+
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
     fn stops_at_the_shared_prefix_when_several_files_match() {
         let directory = temp_case_dir("partial");
         fs::write(directory.join("main.rs"), b"").unwrap();
