@@ -20,10 +20,14 @@ impl CompletionSpecs {
     }
 }
 
-pub fn run(args: &[String], specs: &CompletionSpecs) -> Vec<CompleteLine> {
+pub fn run(args: &[String], specs: &mut CompletionSpecs) -> Vec<CompleteLine> {
     let Some(flag) = args.first() else {
         return Vec::new();
     };
+
+    if flag == "-C" || flag == "--C" {
+        return register(args, specs);
+    }
 
     if flag != "-p" && flag != "--p" {
         return Vec::new();
@@ -38,6 +42,27 @@ pub fn run(args: &[String], specs: &CompletionSpecs) -> Vec<CompleteLine> {
             }
         })
         .collect()
+}
+
+fn register(args: &[String], specs: &mut CompletionSpecs) -> Vec<CompleteLine> {
+    let Some(completer) = args.get(1) else {
+        return vec![CompleteLine::Stderr(
+            "complete: -C: option requires an argument\n".to_string(),
+        )];
+    };
+
+    let commands = &args[2..];
+    if commands.is_empty() {
+        return vec![CompleteLine::Stderr(
+            "complete: -C: command name required\n".to_string(),
+        )];
+    }
+
+    for command in commands {
+        specs.insert(command, completer);
+    }
+
+    Vec::new()
 }
 
 fn format_spec(name: &str, completer: &str) -> String {
@@ -61,7 +86,7 @@ mod tests {
         let mut specs = CompletionSpecs::new();
         specs.insert("git", "/path/to/git/completer");
 
-        let lines = run(&args(&["-p", "git"]), &specs);
+        let lines = run(&args(&["-p", "git"]), &mut specs);
         assert!(matches!(
             lines.as_slice(),
             [CompleteLine::Stdout(text)] if text == "complete -C '/path/to/git/completer' git\n"
@@ -69,9 +94,40 @@ mod tests {
     }
 
     #[test]
+    fn registers_a_completer_then_prints_it() {
+        let mut specs = CompletionSpecs::new();
+
+        assert!(run(&args(&["-C", "/path/to/git/completer", "git"]), &mut specs).is_empty());
+        let git = run(&args(&["-p", "git"]), &mut specs);
+        assert!(matches!(
+            git.as_slice(),
+            [CompleteLine::Stdout(text)] if text == "complete -C '/path/to/git/completer' git\n"
+        ));
+
+        assert!(
+            run(
+                &args(&["-C", "/path/to/docker/completer", "docker"]),
+                &mut specs
+            )
+            .is_empty()
+        );
+        let docker = run(&args(&["-p", "docker"]), &mut specs);
+        assert!(matches!(
+            docker.as_slice(),
+            [CompleteLine::Stdout(text)] if text == "complete -C '/path/to/docker/completer' docker\n"
+        ));
+
+        let git_again = run(&args(&["-p", "git"]), &mut specs);
+        assert!(matches!(
+            git_again.as_slice(),
+            [CompleteLine::Stdout(text)] if text == "complete -C '/path/to/git/completer' git\n"
+        ));
+    }
+
+    #[test]
     fn reports_a_missing_completion_spec() {
-        let specs = CompletionSpecs::new();
-        let lines = run(&args(&["-p", "git"]), &specs);
+        let mut specs = CompletionSpecs::new();
+        let lines = run(&args(&["-p", "git"]), &mut specs);
 
         assert!(matches!(
             lines.as_slice(),

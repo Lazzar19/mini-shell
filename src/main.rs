@@ -145,7 +145,7 @@ fn main() {
         .bell_style(BellStyle::Audible)
         .completion_type(CompletionType::List)
         .build();
-    let specs = CompletionSpecs::new();
+    let mut specs = CompletionSpecs::new();
     let helper = ShellHelper::new();
     let mut editor = Editor::with_config(config).expect("Failed to create editor");
     editor.set_helper(Some(helper));
@@ -216,7 +216,7 @@ fn main() {
             }
             "cd" => change_directory(&tokens[1..], &redirections),
             "complete" => {
-                for line in completion_spec::run(&tokens[1..], &specs) {
+                for line in completion_spec::run(&tokens[1..], &mut specs) {
                     let result = match &line {
                         CompleteLine::Stdout(text) => redirections.write_stdout(text),
                         CompleteLine::Stderr(text) => redirections.write_stderr(text),
