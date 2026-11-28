@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const BUILTIN_COMMANDS: &[&str] = &["echo", "exit", "type", "pwd", "cd"];
+const BUILTIN_COMMANDS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "complete"];
 
 pub fn command_candidates(prefix: &str) -> Vec<String> {
     let directories = env::var_os("PATH")
@@ -109,7 +109,7 @@ mod tests {
         let names = command_candidates_in("", &[first.clone()]);
         assert_eq!(names.iter().filter(|name| *name == "echo").count(), 1);
         assert!(names.iter().any(|name| name == "mycmd"));
-        assert_eq!(names.len(), 6);
+        assert_eq!(names.len(), 7);
 
         let _ = fs::remove_dir_all(&first);
         let _ = fs::remove_dir_all(&second);

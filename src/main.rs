@@ -21,7 +21,7 @@ use parser::parse_command;
 use redirection::{Redirections, split_redirections};
 
 fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "echo" | "exit" | "type" | "pwd" | "cd")
+    matches!(cmd, "echo" | "exit" | "type" | "pwd" | "cd" | "complete")
 }
 
 fn execute_non_builtin_commands(tokens: &[String], redirections: &Redirections) {
@@ -212,7 +212,18 @@ fn main() {
                     .write_stdout(&format!("{}\n", env::current_dir().unwrap().display()));
             }
             "cd" => change_directory(&tokens[1..], &redirections),
+            "complete" => {}
             _ => execute_non_builtin_commands(&tokens, &redirections),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_builtin;
+
+    #[test]
+    fn complete_is_a_shell_builtin() {
+        assert!(is_builtin("complete"));
     }
 }
