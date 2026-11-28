@@ -13,10 +13,12 @@ use rustyline::{
 };
 
 mod completion;
+mod completion_spec;
 mod parser;
 mod redirection;
 
 use completion::ShellHelper;
+use completion_spec::{CompleteLine, CompletionSpecs};
 use parser::parse_command;
 use redirection::{Redirections, split_redirections};
 
@@ -143,6 +145,7 @@ fn main() {
         .bell_style(BellStyle::Audible)
         .completion_type(CompletionType::List)
         .build();
+    let specs = CompletionSpecs::new();
     let helper = ShellHelper::new();
     let mut editor = Editor::with_config(config).expect("Failed to create editor");
     editor.set_helper(Some(helper));
@@ -212,7 +215,17 @@ fn main() {
                     .write_stdout(&format!("{}\n", env::current_dir().unwrap().display()));
             }
             "cd" => change_directory(&tokens[1..], &redirections),
-            "complete" => {}
+            "complete" => {
+                for line in completion_spec::run(&tokens[1..], &specs) {
+                    let result = match &line {
+                        CompleteLine::Stdout(text) => redirections.write_stdout(text),
+                        CompleteLine::Stderr(text) => redirections.write_stderr(text),
+                    };
+                    if let Err(error) = result {
+                        eprintln!("complete: {error}");
+                    }
+                }
+            }
             _ => execute_non_builtin_commands(&tokens, &redirections),
         }
     }
